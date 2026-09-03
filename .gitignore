@@ -1,0 +1,12 @@
+/.env
+/ros_ws/build/
+/ros_ws/install/
+/ros_ws/log/
+/.colcon/
+*.pyc
+__pycache__/
+/.cache/
+/reports/*.log
+/reports/*.png
+!/reports/README.md
+!/reports/rviz_fake.png

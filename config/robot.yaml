@@ -1,0 +1,4 @@
+# Real-hardware configuration. Leave robot_ip empty until fake-mode validation is complete.
+robot_ip: ""
+network_interface: ""
+

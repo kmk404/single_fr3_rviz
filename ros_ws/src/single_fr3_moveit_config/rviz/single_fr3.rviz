@@ -1,0 +1,93 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: base
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+    - Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Description Source: Topic
+      Description Topic:
+        Value: /robot_description
+        Durability Policy: Transient Local
+        Reliability Policy: Reliable
+        History Policy: Keep Last
+        Depth: 1
+      Visual Enabled: true
+      Collision Enabled: false
+    - Class: moveit_rviz_plugin/PlanningScene
+      Name: PlanningScene
+      Enabled: true
+      Move Group Namespace: ""
+      Planning Scene Topic: /monitored_planning_scene
+      Robot Description: robot_description
+      Scene Geometry:
+        Show Scene Geometry: true
+        Scene Alpha: 0.9
+      Scene Robot:
+        Show Robot Visual: true
+        Show Robot Collision: false
+        Robot Alpha: 1.0
+    - Class: moveit_rviz_plugin/Trajectory
+      Name: Planned Path
+      Enabled: true
+      Robot Description: robot_description
+      Trajectory Topic: /display_planned_path
+      Robot Alpha: 0.5
+      Show Robot Visual: true
+      Show Robot Collision: false
+    - Class: moveit_rviz_plugin/MotionPlanning
+      Name: MotionPlanning
+      Enabled: true
+      Move Group Namespace: ""
+      Robot Description: robot_description
+      Planning Request:
+        Planning Group: fr3_arm
+        Interactive Marker Size: 0.2
+        Query Goal State: true
+        Query Start State: false
+      Planned Path:
+        Loop Animation: false
+        State Display Time: 0.05 s
+      Planning Metrics:
+        Show Joint Torques: false
+        Show Manipulability: false
+      MoveIt_Planning_Time: 5
+      MoveIt_Planning_Attempts: 10
+      MoveIt_Allow_Replanning: false
+      MoveIt_Allow_Approximate_IK: false
+      Velocity_Scaling_Factor: 0.2
+      Acceleration_Scaling_Factor: 0.2
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.0
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.5
+      Pitch: 0.45
+      Yaw: 0.75
+Window Geometry:
+  Width: 1600
+  Height: 1000
+  Hide Left Dock: false
+  Hide Right Dock: false

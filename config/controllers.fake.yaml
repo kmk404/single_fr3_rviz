@@ -1,0 +1,42 @@
+# Fake mode intentionally uses position commands so GenericSystem mirrors commanded
+# trajectories into joint state without any real-hardware plugin or network access.
+/**:
+  controller_manager:
+    ros__parameters:
+      update_rate: 100
+      enforce_command_limits: true
+      joint_trajectory_controller:
+        type: joint_trajectory_controller/JointTrajectoryController
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+
+/**:
+  joint_trajectory_controller:
+    ros__parameters:
+      joints:
+        - fr3_joint1
+        - fr3_joint2
+        - fr3_joint3
+        - fr3_joint4
+        - fr3_joint5
+        - fr3_joint6
+        - fr3_joint7
+      command_interfaces:
+        - position
+      state_interfaces:
+        - position
+        - velocity
+      allow_partial_joints_goal: false
+      action_monitor_rate: 20.0
+      state_publish_rate: 50.0
+      allow_nonzero_velocity_at_trajectory_end: false
+      constraints:
+        goal_time: 1.0
+        stopped_velocity_tolerance: 0.02
+        fr3_joint1: {trajectory: 0.05, goal: 0.02}
+        fr3_joint2: {trajectory: 0.05, goal: 0.02}
+        fr3_joint3: {trajectory: 0.05, goal: 0.02}
+        fr3_joint4: {trajectory: 0.05, goal: 0.02}
+        fr3_joint5: {trajectory: 0.05, goal: 0.02}
+        fr3_joint6: {trajectory: 0.05, goal: 0.02}
+        fr3_joint7: {trajectory: 0.05, goal: 0.02}
