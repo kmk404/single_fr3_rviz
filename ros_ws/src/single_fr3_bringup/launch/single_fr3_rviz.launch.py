@@ -69,6 +69,9 @@ def _launch_setup(context):
         LaunchConfiguration("use_fake_hardware").perform(context), "use_fake_hardware"
     )
     use_rviz = LaunchConfiguration("use_rviz").perform(context)
+    load_gripper = _as_bool(
+        LaunchConfiguration("load_gripper").perform(context), "load_gripper"
+    )
     robot_config = LaunchConfiguration("robot_config").perform(context).strip()
     cli_robot_ip = LaunchConfiguration("robot_ip").perform(context)
 
@@ -87,7 +90,7 @@ def _launch_setup(context):
             "arm_prefix": "",
             "connected_to": "base",
             "fake_sensor_commands": "false",
-            "hand": "false",
+            "hand": str(load_gripper).lower(),
             "robot_ip": robot_ip,
             "use_fake_hardware": str(use_fake_hardware).lower(),
             "with_sc": "false",
@@ -258,6 +261,30 @@ def _launch_setup(context):
             )
         )
 
+    if load_gripper and not use_fake_hardware:
+        gripper_share = get_package_share_directory("franka_gripper")
+        nodes.append(
+            Node(
+                package="franka_gripper",
+                executable="franka_gripper_node",
+                name="franka_gripper",
+                output="screen",
+                parameters=[
+                    {
+                        "robot_ip": robot_ip,
+                        "joint_names": [
+                            "fr3_finger_joint1",
+                            "fr3_finger_joint2",
+                        ],
+                    },
+                    os.path.join(
+                        gripper_share, "config", "franka_gripper_node.yaml"
+                    ),
+                ],
+                remappings=[("~/joint_states", "/joint_states")],
+            )
+        )
+
     return nodes
 
 
@@ -287,6 +314,11 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "use_rviz", default_value="true", description="Start RViz 2."
+            ),
+            DeclareLaunchArgument(
+                "load_gripper",
+                default_value="true",
+                description="Add Franka Hand and start its driver in real mode.",
             ),
             OpaqueFunction(function=_launch_setup),
         ]

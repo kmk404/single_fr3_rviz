@@ -28,8 +28,9 @@ services:
     volumes:
       - ..:/workspace
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${OMEGA7_SDK_DIR:-/mnt/data/Projects/omega7/SDK3.17.7}:/opt/forcedimension_sdk:ro
+      - /dev/bus/usb:/dev/bus/usb
     working_dir: /workspace
     # NVIDIA users may uncomment the next line. Intel/AMD rendering uses /dev/dri
     # when it is explicitly added on the command line or in a local compose override.
     # gpus: all
-

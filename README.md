@@ -1,4 +1,4 @@
-# Single FR3 RViz + MoveIt 2
+# Single FR3 RViz + MoveIt 2 + Omega.7
 
 独立的单臂 Franka FR3 控制仓库，目标平台为 Ubuntu 24.04 Noble 和 ROS 2 Jazzy。
 
@@ -13,11 +13,11 @@ RViz 2 → MoveIt 2 / move_group
        → FR3
 ```
 
-仓库只包含单台 FR3，7 个关节统一为 `fr3_joint1` … `fr3_joint7`。不包含原项目的双臂、遥操作设备、手部设备或自定义 UDP 控制链。
+仓库只包含单台 FR3，7 个关节统一为 `fr3_joint1` … `fr3_joint7`，并支持 Franka Hand 和 Force Dimension Omega.7 笛卡尔遥操作。不包含原项目的双臂或自定义 UDP 控制链。
 
 ## 系统要求
 
-- Ubuntu 24.04（宿主也可使用能运行 Docker 的 Linux；容器始终为 Noble）
+- Ubuntu 24.04 x86_64 工控机（容器同样固定为 Ubuntu 24.04 Noble）
 - Docker Engine 和 Docker Compose v2
 - X11 显示；Wayland 桌面需要提供 XWayland
 - 真实机器人模式额外需要实时内核、专用有线网卡、可用的 FCI、正确的机器人系统版本与 libfranka 兼容性
@@ -62,6 +62,55 @@ fake 分支在创建 URDF 前强制清空 IP，只生成 `mock_components/Generi
 ```
 
 测试会确认控制器 active、`/joint_states` 含全部 7 个关节、标准 Action 存在，先发送一条小幅度控制器轨迹，再通过 `move_group` 完成一次规划与执行。结果写入 `reports/fake_mode.log`。
+
+## Omega.7 遥操作
+
+SDK 默认从 `/mnt/data/Projects/omega7/SDK3.17.7` 只读挂载。路径不同时，在 `.env` 中设置：
+
+```bash
+OMEGA7_SDK_DIR=/absolute/path/to/SDK3.17.7
+```
+
+容器启动时会把 Linux x86_64 SDK 解压到容器的临时目录，不会复制 SDK 到仓库。Omega.7 通过 `/dev/bus/usb` 传入容器；宿主机用户必须具有对应 USB 设备的读写权限。
+
+先构建并在 fake 模式验证：
+
+```bash
+./ops/build.sh
+./ops/check_omega7_compat.sh
+./ops/run_omega7_fake.sh
+```
+
+兼容性脚本会检查容器确为 Ubuntu 24.04 x86_64、SDK 3.17.7 动态库依赖完整，并确认遥操作所需的 DHD 符号可以加载。当前 SDK 包名为 `sdk-3.17.7-linux-x86_64-gcc.tar.gz`，与工控机架构必须一致。
+
+设备连接后，节点依次调用 `dhdEnableForce(DHD_ON)` 和 `dhdEmulateButton(DHD_ON)`，并通过 `dhdGetButton(0)` 把 Omega.7 夹爪模拟成使能按钮。启动后先完全松开夹持器；只在模拟按钮按下期间发送机械臂运动指令。按钮按下沿锁存 Omega.7 当前位姿和 `fr3_hand_tcp` 当前位姿作为位置/姿态零点；松开沿立即发布保持轨迹并打开 Franka 夹爪。再次按下会重新对齐双端零点，避免机械臂跳变。
+
+Omega.7 的局部 XYZ 和三轴旋转默认一一对应 FR3 末端局部轴。MoveIt 对每个受限末端目标进行碰撞感知 IK，J1–J6参与求解；首次完整 `/joint_states` 中的 J7 被锁存，IK 请求、结果检查和每条控制器命令都会强制保持该角度。连续遥操作使用短时域 `JointTrajectory`，不会为每个设备采样运行耗时的 OMPL 全局路径规划。
+
+重新标定前先松开夹持器，然后运行：
+
+```bash
+ros2 service call /omega7_teleop/recalibrate std_srvs/srv/Trigger '{}'
+```
+
+主要参数位于 `ros_ws/src/omega7_teleop/config/omega7_teleop.yaml`：
+
+- `position_scale`、`orientation_scale`：平移三轴与旋转缩放。
+- `axis_mapping`：Omega 局部坐标到 FR3 工具局部坐标的正交 3×3 行主序矩阵。
+- `position_deadzone`、`orientation_deadzone`：零点附近死区。
+- `max_linear_speed`、`max_angular_speed`、`max_joint_velocity`：笛卡尔与关节限速。
+- `workspace_min`、`workspace_max`：`fr3_link0` 坐标系下的 XYZ 工作空间边界。
+- `device_timeout`、`joint_state_timeout`、`max_ik_failures`：输入与求解看门狗。
+- `omega_gripper_closed_gap`、`omega_gripper_open_gap`：Omega 夹持间距标定范围。
+- `robot_gripper_closed_width`、`robot_gripper_open_width`：Franka 夹爪总宽度范围。
+
+连接真机前把缩放、轴向、工作空间和夹爪范围在 fake 模式逐项核对。真机启动方式为：
+
+```bash
+./ops/run_omega7_real.sh 172.16.0.2
+```
+
+设备断连、SDK 返回异常/非有限值、数据超时、关节状态超时、连续 IK 失败或松开夹持器都会停止遥操作。重新连接后必须先松开再捏住，防止带着旧零点自动恢复运动。
 
 ## RViz 操作
 
@@ -145,7 +194,8 @@ single_fr3_rviz/
 └── ros_ws/src/
     ├── single_fr3_description/
     ├── single_fr3_moveit_config/
-    └── single_fr3_bringup/
+    ├── single_fr3_bringup/
+    └── omega7_teleop/
 ```
 
 官方依赖通过 `franka_jazzy.repos` 固定版本，未复制或修改原仓库 `/mnt/data/Projects/26summer/Gello_armhand_teleop12`。

@@ -1,0 +1,47 @@
+omega7_teleop:
+  ros__parameters:
+    # The entrypoint extracts the supplied Force Dimension SDK archive here.
+    sdk_library: /tmp/forcedimension_sdk/lib/release/lin-x86_64-gcc/libdhd.so.3.17.7
+    require_omega7: true
+
+    base_frame: fr3_link0
+    ee_link: fr3_hand_tcp
+    arm_group: fr3_arm
+    ik_service: /compute_ik
+    trajectory_topic: /joint_trajectory_controller/joint_trajectory
+    gripper_action: /franka_gripper/move
+
+    device_rate_hz: 200.0
+    command_rate_hz: 30.0
+    command_duration: 0.12
+    device_timeout: 0.10
+    joint_state_timeout: 0.25
+    ik_timeout: 0.025
+    max_ik_failures: 3
+    max_raw_position: 0.30
+
+    # At each squeeze edge, Omega and FR3 poses are captured as local zeros.
+    # Identity maps Omega local +X/+Y/+Z and rotations to the FR3 tool axes.
+    position_scale: [1.0, 1.0, 1.0]
+    axis_mapping: [1.0, 0.0, 0.0,
+                   0.0, 1.0, 0.0,
+                   0.0, 0.0, 1.0]
+    orientation_scale: 1.0
+    position_deadzone: 0.001
+    orientation_deadzone: 0.015
+
+    max_linear_speed: 0.08
+    max_angular_speed: 0.40
+    workspace_min: [0.10, -0.55, 0.05]
+    workspace_max: [0.75, 0.55, 0.90]
+    max_joint_velocity: [0.35, 0.35, 0.35, 0.35, 0.50, 0.50, 0.0]
+    j7_constraint_tolerance: 0.0001
+
+    # Smaller Omega gap means a tighter squeeze and a smaller Franka width.
+    omega_gripper_closed_gap: 0.0
+    omega_gripper_open_gap: 0.025
+    robot_gripper_closed_width: 0.0
+    robot_gripper_open_width: 0.08
+    gripper_speed: 0.08
+    gripper_command_period: 0.15
+    gripper_width_deadband: 0.002

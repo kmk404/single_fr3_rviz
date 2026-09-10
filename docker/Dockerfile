@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libeigen3-dev \
     libpoco-dev \
+    libusb-1.0-0 \
     python3-colcon-common-extensions \
     python3-rosdep \
     python3-vcstool \
@@ -48,13 +49,14 @@ RUN source /opt/ros/jazzy/setup.bash \
          /opt/franka_ws/src/franka_ros2/franka_msgs \
          /opt/franka_ws/src/franka_ros2/franka_semantic_components \
          /opt/franka_ws/src/franka_ros2/franka_hardware \
+         /opt/franka_ws/src/franka_ros2/franka_gripper \
          /opt/franka_ws/src/franka_ros2/franka_robot_state_broadcaster \
     && rm -rf /var/lib/apt/lists/*
 
 RUN source /opt/ros/jazzy/setup.bash \
     && cd /opt/franka_ws \
     && colcon build --merge-install \
-       --packages-up-to franka_hardware franka_robot_state_broadcaster \
+       --packages-up-to franka_hardware franka_gripper franka_robot_state_broadcaster \
        --cmake-args \
          -DCMAKE_BUILD_TYPE=Release \
          -DBUILD_TESTING=OFF \

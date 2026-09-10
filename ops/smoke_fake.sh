@@ -26,7 +26,9 @@ trap cleanup EXIT
 
 python3 - <<'PY' | tee -a "$log_file"
 import sys
+import time
 
+from controller_manager_msgs.srv import ListControllers
 import rclpy
 from control_msgs.action import FollowJointTrajectory
 from moveit_msgs.action import MoveGroup
@@ -42,6 +44,25 @@ client = ActionClient(
     "/joint_trajectory_controller/follow_joint_trajectory",
 )
 try:
+    controller_client = node.create_client(
+        ListControllers, "/controller_manager/list_controllers"
+    )
+    if not controller_client.wait_for_service(timeout_sec=60.0):
+        raise RuntimeError("controller manager did not appear")
+    controller_deadline = time.monotonic() + 60.0
+    while time.monotonic() < controller_deadline:
+        controller_future = controller_client.call_async(ListControllers.Request())
+        rclpy.spin_until_future_complete(node, controller_future, timeout_sec=2.0)
+        if controller_future.done() and any(
+            controller.name == "joint_trajectory_controller"
+            and controller.state == "active"
+            for controller in controller_future.result().controller
+        ):
+            break
+        time.sleep(0.1)
+    else:
+        raise RuntimeError("joint_trajectory_controller did not become active")
+
     if not client.wait_for_server(timeout_sec=60.0):
         raise RuntimeError("FollowJointTrajectory action server did not appear")
 
