@@ -1,0 +1,21 @@
+repositories:
+  zed-ros2-wrapper:
+    type: git
+    url: https://github.com/stereolabs/zed-ros2-wrapper.git
+    version: 86171bccda22de6e83ccc69b3c0e67af99dece7c
+  zed-ros2-interfaces:
+    type: git
+    url: https://github.com/stereolabs/zed-ros2-interfaces.git
+    version: e97008721d56ecf3733b95265ff4deaddf3f664e
+  nmea_msgs:
+    type: git
+    url: https://github.com/ros-drivers/nmea_msgs.git
+    version: b57ff6364bde239c78f6e2ab89727ca8c0fbc1f0
+  geographic_info:
+    type: git
+    url: https://github.com/ros-geographic-info/geographic_info.git
+    version: f70b81a438172cd7a066dc1b18314d70e0eb6389
+  robot_localization:
+    type: git
+    url: https://github.com/cra-ros-pkg/robot_localization.git
+    version: 3efa714fb9c1ff40966327b7bed7053b2570be4d

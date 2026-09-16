@@ -10,3 +10,4 @@ __pycache__/
 /reports/*.png
 !/reports/README.md
 !/reports/rviz_fake.png
+SDK3.17.7/

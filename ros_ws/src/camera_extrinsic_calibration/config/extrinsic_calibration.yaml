@@ -1,0 +1,62 @@
+# Physical layout is kept separate from the estimator. Lengths are metres.
+table:
+  frame_id: table
+  hole_spacing: 0.025
+  rows: 31
+  cols: 31
+
+aruco:
+  dictionary: DICT_5X5_50
+  marker_length: 0.077
+
+# Marker frame follows OpenCV's detected-corner convention: origin at black-square
+# centre, +x from printed left to right, +y from printed top to bottom, +z into the
+# table for a face-up marker. Matrices map marker-frame coordinates into table.
+markers:
+  1:  # BL: A=(0,0), printed left-to-right points table +x
+    corner: BL
+    T_table_marker:
+      [1.0, 0.0,  0.0, 0.0385,
+       0.0, -1.0, 0.0, 0.0485,
+       0.0, 0.0, -1.0, 0.0,
+       0.0, 0.0,  0.0, 1.0]
+  0:  # BR: A=(30,0) is the printed right-edge reference
+    corner: BR
+    T_table_marker:
+      [1.0, 0.0,  0.0, 0.7115,
+       0.0, -1.0, 0.0, 0.0485,
+       0.0, 0.0, -1.0, 0.0,
+       0.0, 0.0,  0.0, 1.0]
+  2:  # TL: printed left-to-right points table -x
+    corner: TL
+    T_table_marker:
+      [-1.0, 0.0, 0.0, 0.0385,
+       0.0, 1.0, 0.0, 0.7015,
+       0.0, 0.0, -1.0, 0.0,
+       0.0, 0.0, 0.0, 1.0]
+  5:  # TR: A=(30,30) is the printed left-edge reference
+    corner: TR
+    T_table_marker:
+      [-1.0, 0.0, 0.0, 0.7115,
+       0.0, 1.0, 0.0, 0.7015,
+       0.0, 0.0, -1.0, 0.0,
+       0.0, 0.0, 0.0, 1.0]
+
+franka:
+  base_frame: fr3_link0
+  # APPROXIMATE: midpoint of screws at holes (14,29) and (19,24), with Front
+  # toward table -y. M6-in-M8 clearance, mounting height and tilt are ignored.
+  approximate: true
+  T_table_base:
+    [0.0, 1.0, 0.0, 0.4125,
+     -1.0, 0.0, 0.0, 0.6625,
+     0.0, 0.0, 1.0, 0.0,
+     0.0, 0.0, 0.0, 1.0]
+
+quality:
+  max_marker_reprojection_error_px: 3.0
+  outlier_translation_threshold_m: 0.035
+  outlier_rotation_threshold_deg: 5.0
+  max_fused_reprojection_error_px: 2.5
+  max_translation_spread_m: 0.020
+  max_rotation_spread_deg: 3.0

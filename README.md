@@ -73,6 +73,14 @@ OMEGA7_SDK_DIR=/absolute/path/to/SDK3.17.7
 
 容器启动时会把 Linux x86_64 SDK 解压到容器的临时目录，不会复制 SDK 到仓库。Omega.7 通过 `/dev/bus/usb` 传入容器；宿主机用户必须具有对应 USB 设备的读写权限。
 
+首次连接 Omega.7 前，在宿主机安装 USB 权限规则：
+
+```bash
+./ops/install_omega7_udev.sh
+```
+
+脚本会把 `udev/99-omega7.rules` 安装到 `/etc/udev/rules.d/`，重新加载 udev 规则，并触发已连接 USB 设备的规则匹配。安装后仍须重新插拔 Omega.7，再用 `lsusb -d 1451:0402` 和 `ls -l /dev/bus/usb/BBB/DDD` 确认设备存在且权限为 `crw-rw-rw-`。Compose 会继续挂载整个 `/dev/bus/usb`，并仅通过 `device_cgroup_rules` 放行 USB 总线的字符设备（major 189）；无需且不应启用容器 `privileged` 模式。
+
 先构建并在 fake 模式验证：
 
 ```bash
@@ -83,15 +91,19 @@ OMEGA7_SDK_DIR=/absolute/path/to/SDK3.17.7
 
 兼容性脚本会检查容器确为 Ubuntu 24.04 x86_64、SDK 3.17.7 动态库依赖完整，并确认遥操作所需的 DHD 符号可以加载。当前 SDK 包名为 `sdk-3.17.7-linux-x86_64-gcc.tar.gz`，与工控机架构必须一致。
 
-设备连接后，节点依次调用 `dhdEnableForce(DHD_ON)` 和 `dhdEmulateButton(DHD_ON)`，并通过 `dhdGetButton(0)` 把 Omega.7 夹爪模拟成使能按钮。启动后先完全松开夹持器；只在模拟按钮按下期间发送机械臂运动指令。按钮按下沿锁存 Omega.7 当前位姿和 `fr3_hand_tcp` 当前位姿作为位置/姿态零点；松开沿立即发布保持轨迹并打开 Franka 夹爪。再次按下会重新对齐双端零点，避免机械臂跳变。
+设备连接后，在运行 `./ops/run_omega7_fake.sh` 或 `./ops/run_omega7_real.sh` 的终端中按一次空格键，同时启用机械臂遥操作和夹爪控制；再按一次空格键停止两者。每次启用都会锁存 Omega.7 与 `fr3_hand_tcp` 的当前位姿作为零点，避免机械臂跳变。空格键由直接占有终端的启动包装脚本读取，再通过 `/omega7_teleop/toggle_motion` 服务通知节点，不依赖 `ros2 launch` 子进程的标准输入。启动脚本必须直接运行在交互式终端中，不能重定向标准输入。
 
-Omega.7 的局部 XYZ 和三轴旋转默认一一对应 FR3 末端局部轴。MoveIt 对每个受限末端目标进行碰撞感知 IK，J1–J6参与求解；首次完整 `/joint_states` 中的 J7 被锁存，IK 请求、结果检查和每条控制器命令都会强制保持该角度。连续遥操作使用短时域 `JointTrajectory`，不会为每个设备采样运行耗时的 OMPL 全局路径规划。
+Omega.7 夹爪只控制 Franka Hand，不再参与使能；未按空格时不会发布夹爪命令。使能后，完全张开对应 `robot_gripper_open_width`，逐渐捏合会连续经过中间开度，合拢对应 `robot_gripper_closed_width`。夹爪命令每 `150 ms` 最多更新一次，小于 `2 mm` 的 Franka 宽度变化会被忽略以抑制抖动。注意：空格键是锁存开关；离手前应再按一次空格并确认终端显示 `arm motion disabled by SPACE`，异常时使用实体急停。
 
-重新标定前先松开夹持器，然后运行：
+默认轴向已按实际操作方向校正：Omega 的前后轴与左右轴互换后，两条水平轴同时反向，上下轴取反；平移与手腕旋转使用同一个右手正交映射。MoveIt 对每个受限末端目标进行碰撞感知 IK，J1–J7 全部参与求解，以保留 FR3 的冗余自由度并减少奇异构型附近的无解。每个关节的单周期变化均受 `max_joint_velocity` 限制，其中 J7 默认采用更保守的 `0.25 rad/s`；连续遥操作使用短时域 `JointTrajectory` 平滑跟踪，不会为每个设备采样运行耗时的 OMPL 全局路径规划。
+
+重新标定会关闭运动使能。运行：
 
 ```bash
 ros2 service call /omega7_teleop/recalibrate std_srvs/srv/Trigger '{}'
 ```
+
+然后把 Omega.7 放到希望作为零点的位置，在启动终端按一次空格键重新启用。
 
 主要参数位于 `ros_ws/src/omega7_teleop/config/omega7_teleop.yaml`：
 
@@ -181,6 +193,7 @@ real 模式在启动任何 ROS 节点之前验证 IPv4。未提供 IP、格式�
 - **real 模式立即退出**：先检查 IP 是否已通过参数或 `config/robot.yaml` 提供；该失败是预期的安全保护。
 - **连接超时/UDP receive timeout**：检查专用网卡、路由、防火墙、实时内核和 CPU 调度。不要反复执行轨迹，先解决网络抖动。
 - **libfranka 版本不兼容**：按 Franka 官方兼容表核对机器人系统版本；不要绕过版本检查。
+- **Omega.7 报 `dhdOpen failed: no device found`**：运行 `./ops/install_omega7_udev.sh` 后重新插拔设备，确认 `1451:0402` 对应的 `/dev/bus/usb/BBB/DDD` 权限为 `0666`；然后重新创建容器，使 Compose 的 USB cgroup 规则生效。
 - **NVIDIA 图形加速**：安装 NVIDIA Container Toolkit，并在 `docker/compose.yaml` 中取消 `gpus: all` 注释。软件渲染不影响控制接口验证。
 
 ## 目录
@@ -191,6 +204,7 @@ single_fr3_rviz/
 ├── docker/                     # Jazzy/Noble 镜像与 Compose
 ├── ops/                        # 构建、启动、测试脚本
 ├── reports/                    # 本地测试产物（日志/截图不提交）
+├── udev/                       # Omega.7 USB 权限规则
 └── ros_ws/src/
     ├── single_fr3_description/
     ├── single_fr3_moveit_config/
@@ -199,3 +213,74 @@ single_fr3_rviz/
 ```
 
 官方依赖通过 `franka_jazzy.repos` 固定版本，未复制或修改原仓库 `/mnt/data/Projects/26summer/Gello_armhand_teleop12`。
+
+## ZED 2i 自动外参标定
+
+`camera_extrinsic_calibration` 使用平台四角的固定 ArUco marker 估计可移动
+ZED 2i 左目光学坐标系相对 FR3 基座的位姿。核心逻辑不依赖 marker 的固定
+布局；更换标记或实测基座位姿时只需编辑
+`ros_ws/src/camera_extrinsic_calibration/config/extrinsic_calibration.yaml`。
+
+当前物理配置为 `DICT_5X5_50`、黑框边长 `0.077 m`，marker ID/角点对应为
+BL=1、BR=0、TL=2、TR=5。配置中的 `T_table_base` 是安装估算值：以孔
+(14,29) 和 (19,24) 的中点作为 `fr3_link0` 原点投影、Front 指向 table
+`-y`，并忽略 M6/M8 间隙、安装高度和倾斜。因此输出可用于初始集成，但在
+需要高精度 base-frame 外参前必须实测并替换该矩阵。
+
+本机已按 `zed_jazzy.repos` 固定并从源码构建官方 ZED ROS 2 wrapper v5.4.1。
+重新拉取依赖时使用：
+
+```bash
+vcs import ros_ws/src < zed_jazzy.repos
+```
+
+系统仍需 ZED SDK 5.4.1，以及 wrapper 的 rosdep/GeographicLib 开发依赖。启动
+wrapper 时必须显式启用 left/right 发布；官方默认配置只发布内容相同的 `rgb`
+左目别名。推荐的低负载标定启动方式为：
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ros_ws/install/setup.bash
+ros2 launch zed_wrapper zed_camera.launch.py \
+  camera_model:=zed2i \
+  param_overrides:='video.publish_left_right:=true;video.publish_rgb:=false;depth.depth_mode:=NONE;pos_tracking.pos_tracking_enabled:=false'
+```
+
+另开终端运行标定节点：
+
+```bash
+source /workspace/ros_ws/install/setup.bash
+ros2 launch camera_extrinsic_calibration camera_extrinsic_calibration.launch.py \
+  output_yaml:=/workspace/camera_extrinsic.yaml
+```
+
+默认订阅 wrapper 5.1+ 的：
+
+- `/zed/zed_node/left/color/rect/image`
+- `/zed/zed_node/left/color/rect/camera_info`
+
+默认并严格检查 optical frame `zed_left_camera_frame_optical`。若实际
+`camera_name`、namespace 或 wrapper 版本不同，应在 `config/node.yaml` 中同步
+修改 topics 和 frame。这里使用 rectified 左彩色图对应的真实 `CameraInfo`；
+不会使用写死内参。
+
+有效结果原子写入 `camera_extrinsic.yaml`。其中 `T_base_camera` 的 camera 明确
+指图像消息的 **左目 optical frame**，矩阵语义是把该 optical frame 中的点变换
+到 `fr3_link0`：
+
+```text
+p_base = T_base_camera @ p_camera_optical
+```
+
+节点同时发布：
+
+- `~/quality`：JSON 质量指标，包括检测 ID、有效 marker 数、重投影误差、
+  平移/旋转 spread、confidence 和 calibration_valid。
+- `~/debug_image`：marker 四角、ID、坐标轴和各 marker 重投影误差。
+
+每个 marker 会独立产生 `T_table_camera`。估计先按重投影误差过滤，再以
+translation 与 SO(3) 测地角建立最大一致集合；剩余平移按重投影误差加权，
+rotation 使用 SciPy 的 quaternion/SO(3) mean，不平均 Euler angle。一个 marker
+也可输出，但 confidence 上限自动降为多 marker 情况的一半。默认只在本次运行
+首次得到 `calibration_valid=true` 时写文件；持续覆盖可设置
+`save_continuously:=true`。

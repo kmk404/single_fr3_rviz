@@ -1,0 +1,11 @@
+camera_extrinsic_calibrator:
+  ros__parameters:
+    # Official zed-ros2-wrapper defaults for camera_name=zed and camera_model=zed2i.
+    image_topic: /zed/zed_node/left/color/rect/image
+    camera_info_topic: /zed/zed_node/left/color/rect/camera_info
+    # zed-ros2-wrapper >= 5.1 ROS-convention name.
+    expected_optical_frame: zed_left_camera_frame_optical
+    output_yaml: camera_extrinsic.yaml
+    debug_image_output: reports/camera_calibration_debug.png
+    debug: true
+    save_continuously: false
