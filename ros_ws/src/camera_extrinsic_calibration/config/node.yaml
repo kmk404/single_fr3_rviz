@@ -5,7 +5,11 @@ camera_extrinsic_calibrator:
     camera_info_topic: /zed/zed_node/left/color/rect/camera_info
     # zed-ros2-wrapper >= 5.1 ROS-convention name.
     expected_optical_frame: zed_left_camera_frame_optical
+    # Physical left-eye dimensions, never the 2560x720 stereo concatenation.
+    expected_image_width: 1280
+    expected_image_height: 720
     output_yaml: camera_extrinsic.yaml
     debug_image_output: reports/camera_calibration_debug.png
     debug: true
+    # true: acquire a fresh full stable window before EACH overwrite.
     save_continuously: false

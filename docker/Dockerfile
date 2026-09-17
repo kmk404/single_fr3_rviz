@@ -17,8 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-rosdep \
     python3-vcstool \
     python3-yaml \
+    python3-opencv \
+    python3-scipy \
     ros-dev-tools \
     ros-jazzy-controller-manager \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-std-srvs \
     ros-jazzy-joint-state-broadcaster \
     ros-jazzy-joint-trajectory-controller \
     ros-jazzy-moveit \

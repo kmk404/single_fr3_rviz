@@ -53,10 +53,17 @@ franka:
      0.0, 0.0, 1.0, 0.0,
      0.0, 0.0, 0.0, 1.0]
 
+# Initial acceptance thresholds, not an accuracy guarantee. Never auto-relaxed.
 quality:
-  max_marker_reprojection_error_px: 3.0
-  outlier_translation_threshold_m: 0.035
-  outlier_rotation_threshold_deg: 5.0
-  max_fused_reprojection_error_px: 2.5
-  max_translation_spread_m: 0.020
-  max_rotation_spread_deg: 3.0
+  min_support_markers: 2
+  max_global_rms_px: 1.0
+  max_marker_rms_px: 1.5
+  ambiguity_rms_gap_px: 0.15
+  ambiguity_translation_m: 0.005
+  ambiguity_rotation_deg: 0.5
+  window_duration_sec: 2.0
+  window_min_frames: 30
+  max_translation_spread_m: 0.005
+  max_rotation_spread_deg: 0.5
+  max_data_gap_sec: 0.5
+  max_window_frames: 1000

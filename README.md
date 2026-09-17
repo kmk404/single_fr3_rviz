@@ -246,41 +246,144 @@ ros2 launch zed_wrapper zed_camera.launch.py \
   param_overrides:='video.publish_left_right:=true;video.publish_rgb:=false;depth.depth_mode:=NONE;pos_tracking.pos_tracking_enabled:=false'
 ```
 
-另开终端运行标定节点：
+构建标定包（只构建该包，不启动机器人控制）：
 
 ```bash
-source /workspace/ros_ws/install/setup.bash
+cd /mnt/data/Projects/26summer/single_fr3_rviz
+source /opt/ros/jazzy/setup.bash
+cd ros_ws
+colcon build --symlink-install --packages-select camera_extrinsic_calibration
+source install/setup.bash
+cd ..
+```
+
+另开终端启动标定。显式传入源码布局和绝对输出路径，避免读到安装目录的旧 YAML：
+
+```bash
+cd /mnt/data/Projects/26summer/single_fr3_rviz
+source /opt/ros/jazzy/setup.bash
+source ros_ws/install/setup.bash
 ros2 launch camera_extrinsic_calibration camera_extrinsic_calibration.launch.py \
-  output_yaml:=/workspace/camera_extrinsic.yaml
+  layout_file:="$PWD/ros_ws/src/camera_extrinsic_calibration/config/extrinsic_calibration.yaml" \
+  node_config:="$PWD/ros_ws/src/camera_extrinsic_calibration/config/node.yaml" \
+  output_yaml:="$PWD/reports/camera_extrinsic.yaml" \
+  debug_image_output:="$PWD/reports/camera_calibration_debug.png"
 ```
 
-默认订阅 wrapper 5.1+ 的：
+容器内将上述仓库路径替换为 `/workspace`。启动日志会打印实际读取布局的绝对路径、
+SHA-256 和输出绝对路径；不传 `layout_file` 时仍默认使用安装目录的配置。
 
-- `/zed/zed_node/left/color/rect/image`
-- `/zed/zed_node/left/color/rect/camera_info`
+默认订阅 `/zed/zed_node/left/color/rect/image` 和对应 `camera_info`，严格核对
+`zed_left_camera_frame_optical`。Image/CameraInfo 必须具有**相同时间戳**，缓存最多
+10 条，不复用旧 CameraInfo；未配对、队列溢出或中断会阻止稳定验收。若 wrapper
+使用不同名称，在 `node.yaml` 修改 topics/frame。请先核查实际消息，不要放宽检测条件。
 
-默认并严格检查 optical frame `zed_left_camera_frame_optical`。若实际
-`camera_name`、namespace 或 wrapper 版本不同，应在 `config/node.yaml` 中同步
-修改 topics 和 frame。这里使用 rectified 左彩色图对应的真实 `CameraInfo`；
-不会使用写死内参。
+现场左眼尺寸为 **1280×720**，`node.yaml` 的 `expected_image_width/height` 默认严格检查
+此尺寸，并核对 CameraInfo 尺寸及解码后的数组尺寸。**2560×720 是左右拼接图**，不能
+作为左眼输入。合法切换单眼分辨率时需同步修改这两个参数，并重新采集。
+rect 图使用 `CameraInfo.P[:3,:3]`，PnP 畸变为零，不使用原图的 K/D，也不引入双目基线。
+左眼 P 的第四列必须为零；非默认 ROI/binning 暂不支持，直接报告失败，避免错误缩放。
+CameraInfo.R 将原始 optical 坐标旋转到 rectified 坐标；若非单位阵，保存时显式换回
+消息声明的 optical frame，并保留 rectified PnP 矩阵以便审计。参考内参
+fx=fy=528.8273315429688、cx=630.1070556640625、cy=356.42413330078125 仅用于现场核对，
+没有写死到求解器。实现依据 [CameraInfo 消息定义](https://github.com/ros2/common_interfaces/blob/jazzy/sensor_msgs/msg/CameraInfo.msg)
+与 [OpenCV PnP 文档](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)。
 
-有效结果原子写入 `camera_extrinsic.yaml`。其中 `T_base_camera` 的 camera 明确
-指图像消息的 **左目 optical frame**，矩阵语义是把该 optical frame 中的点变换
-到 `fr3_link0`：
+### 联合求解与保存条件
 
-```text
-p_base = T_base_camera @ p_camera_optical
+角点始终按 ArUco 解码后的印刷 TL/TR/BR/BL 顺序配对。marker 的 +x 向印刷右方、+y 向
+印刷下方，四角通过现有 `T_table_marker` 变换到 table；上排 180° 旋转已包含在 YAML
+中，绝不按图像上下左右重新排序。每次拼接至少两张板的角点，用 `SOLVEPNP_IPPE`
+生成共面候选（不是 `IPPE_SQUARE`），检查全部支持角点正深度、相机在 table 上方，
+再使用 `solvePnPRefineLM` 联合优化。两板必须同时合格；三至四板枚举至少两板的子集，
+对所有检测板按整板评分，优先最多支持板，再按联合 RMS 排序、优化并重新核对支持集。
+同等支持数、RMS 差不超过 0.15 px、位姿差超过 5 mm 或 0.5° 时，保守报告候选歧义。
+这些歧义阈值也在 `quality` 中配置；不会按 IPPE 返回顺序选择。
+
+PnP 得到 `T_camera_table`，取逆得到 `T_table_camera`，再计算
+`T_base_camera = inverse(T_table_base) @ T_table_camera`。
+当 CameraInfo.R 非单位阵时，先完成上述 rectified→optical 换算。
+最终误差均由**同一个联合位姿**重新投影计算：角点二维欧氏距离的 RMS。
+全局 RMS 覆盖支持板的全部角点，每板 RMS 使用该板四角；不再平均单板独立拟合误差，
+不再平均单板位姿，也不输出可替代验收条件的 confidence 分数。单板不能正式保存。
+
+`extrinsic_calibration.yaml` 的 `quality` 初始验收阈值如下，**不是精度保证**，不会自动放宽：
+
+| 条件 | 默认值 |
+| --- | --- |
+| 每帧支持板数 | ≥2 |
+| 全局角点 RMS / 每张支持板 RMS | ≤1.0 px / ≤1.5 px |
+| 连续窗口时长 / 不同时间戳帧数 | ≥2 秒 / ≥30 帧，两者同时满足 |
+| 相对整个窗口中心的最大平移 / SO(3) 旋转偏差 | ≤5 mm / ≤0.5° |
+| 数据中断（消息时间差及墙钟看门狗） | >0.5 秒清空 |
+| 窗口容量保护 | 1000 帧，未满足时长则重置，绝不滑动截断 |
+
+状态依次为 `waiting`、`collecting`、`finalizing`、`saved`。窗口不断增长，不滑动丢弃早期帧；
+平移中心与 SO(3) rotation mean 用于整窗稳定性检查，另外以首帧锚定同样的运动阈值，
+避免慢漂移随着中心移动而被掩盖。不合格帧、歧义、明显移动、失去检测、重复/倒退/零
+时间戳、长时间中断、尺寸或内参变化都会清空当前窗口。固定窗口只能约束观测期间的
+运动；小于阈值的运动不代表绝对静止，相机移动后必须重新标定。
+
+窗口通过后，汇总各帧支持板角点，LM 优化**一个共同位姿**；逐帧、逐板重新检查残差、
+正深度、桌面上方、支持集及相对最终位姿的波动。全部合格才在同目录临时文件中写入、
+flush/fsync 并原子替换结果；写入失败不锁定、不破坏旧文件。默认成功一次后锁定。
+`save_continuously:=true` 的兼容语义改为：每次覆盖前必须重新收集一个完整、互不重叠的
+稳定窗口，不再逐帧覆盖。旧配置中的单板融合阈值已移除，迁移时使用新版 `quality`。
+
+### 诊断、重新采集与输出
+
+```bash
+ros2 topic echo /camera_extrinsic_calibrator/quality
+ros2 run rqt_image_view rqt_image_view /camera_extrinsic_calibrator/debug_image
+ros2 run rqt_image_view rqt_image_view /camera_extrinsic_calibrator/raw_image
+ros2 service call /camera_extrinsic_calibrator/recollect std_srvs/srv/Trigger '{}'
+ros2 param get /camera_extrinsic_calibrator layout_file
+ros2 param get /camera_extrinsic_calibrator output_yaml
+realpath reports/camera_extrinsic.yaml
 ```
 
-节点同时发布：
+重新采集立即解除锁定并清空缓存，旧 YAML 保留到新结果通过；不会删除已有标定。
+`quality` JSON 包含检测 ID、支持 ID、各板拒绝原因、联合全局/每板 RMS、候选数量及歧义、
+窗口帧数/时长、平移/旋转最大波动和状态；`calibration_valid` 表示当前帧几何合格，
+**不等于已经保存**，应同时看 `state=saved`/`saved_once`。未能求得有效候选时 RMS 可为空；
+若存在被拒绝的联合拟合，`residual_scope` 会注明诊断误差的范围。
 
-- `~/quality`：JSON 质量指标，包括检测 ID、有效 marker 数、重投影误差、
-  平移/旋转 spread、confidence 和 calibration_valid。
-- `~/debug_image`：marker 四角、ID、坐标轴和各 marker 重投影误差。
+检测开启 `CORNER_REFINE_SUBPIX`。调试图绿色表示实际支持板、红色表示拒绝的已配置板、
+黄色表示未配置检测 ID，紫色显示 ArUco 未通过解码的 rejected 四边形。排查右下 ID0 时
+同时观察原图和紫色候选，检查遮挡、反光、模糊及黑框完整性；不通过降低阈值掩盖问题。
+`raw_image` 保留原消息，叠加仅在副本进行；保存时另外写出 `*_raw.png` 和调试 PNG。
 
-每个 marker 会独立产生 `T_table_camera`。估计先按重投影误差过滤，再以
-translation 与 SO(3) 测地角建立最大一致集合；剩余平移按重投影误差加权，
-rotation 使用 SciPy 的 quaternion/SO(3) mean，不平均 Euler angle。一个 marker
-也可输出，但 confidence 上限自动降为多 marker 情况的一半。默认只在本次运行
-首次得到 `calibration_valid=true` 时写文件；持续覆盖可设置
-`save_continuously:=true`。
+结果记录 `T_camera_table`、`T_table_camera`、`T_base_camera`（兼容 `matrix_4x4`）、平移/
+四元数、坐标约定、支持 ID、逐帧时间戳与支持集/残差、窗长/帧数/稳定性、图像尺寸、实际
+CameraInfo 与 PnP 内参、质量阈值、布局快照/校验和及路径。
+`table_to_base_is_approximate` 保留；时间稳定和低重投影误差不能消除板布局测量误差、
+内参偏差或基座安装估算误差，**不代表机器人基座绝对精度**。
+
+### 验证
+
+```bash
+source /opt/ros/jazzy/setup.bash
+PYTHONNOUSERSITE=1 PYTHONPATH="$PWD/ros_ws/src/camera_extrinsic_calibration:$PYTHONPATH" \
+  python3 -m pytest -q ros_ws/src/camera_extrinsic_calibration/test
+cd ros_ws
+colcon test --packages-select camera_extrinsic_calibration --event-handlers console_direct+
+colcon test-result --verbose
+```
+
+已在 Ubuntu 24.04.4 x86_64 / ROS 2 Jazzy / Python 3.12.3 / OpenCV 4.6.0 容器中完成
+colcon 构建和 45 项测试（全部通过，无跳过），并验证安装后的 launch、参数读取、重新采集服务
+及无输入时不保存。系统 ROS 2 Humble / OpenCV 4.5.4 也已通过同一套测试；纯数学部分另在
+OpenCV 5.0.0 验证。用户级 OpenCV 5 与本机 Humble 的 cv_bridge 不兼容，完整节点测试使用
+`PYTHONNOUSERSITE=1` 选择系统匹配依赖，没有修改系统依赖。测试覆盖无噪声多板恢复、
+变换方向、上排 180° 顺序、单板拒绝、两板矛盾、三/四板异常、同等支持歧义、稳定及
+带噪序列、移动/慢漂移/旋转、丢失/时间戳/间断/内参尺寸变化、逐帧最终残差、一次锁定/
+连续模式/重新采集、精确配对、非单位 R 换算、原图保护及原子写入失败。
+
+仍需现场验证：工控机 ZED wrapper 的消息配对、实际 P/R/分辨率、光照与右下 ID0
+检出率、实际静止/移动序列、保存路径权限，以及用独立实测基准评估绝对精度。
+未连接相机或机器人，没有运行或修改机器人控制模块。
+
+Ubuntu 24.04 工控机的源码传输、依赖安装、独立工作区构建和启动步骤见
+[部署与兼容性说明](docs/camera_calibration_ubuntu2404.md)。
+可运行 `./ops/test_camera_calibration_noble.sh` 在隔离的 Noble/Jazzy 容器中复验标定包；
+仓库 Dockerfile 已补齐标定依赖，旧镜像需重新构建。
