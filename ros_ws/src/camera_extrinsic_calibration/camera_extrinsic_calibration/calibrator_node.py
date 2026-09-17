@@ -151,9 +151,13 @@ class ExtrinsicCalibratorNode(Node):
                 self._publish_quality()
         if len(own) > 10:
             own.popitem(last=False)
-            self.window.reset("synchronization_queue_overflow")
-            self.latest_metrics = failure("synchronization_queue_overflow")
-            self._publish_quality()
+            if is_image:
+                # An unmatched image was lost, so the acquisition is no longer
+                # continuous. CameraInfo may legitimately run faster than the
+                # image topic; evicting unused metadata does not lose a frame.
+                self.window.reset("synchronization_queue_overflow")
+                self.latest_metrics = failure("synchronization_queue_overflow")
+                self._publish_quality()
 
     def _process(self, message, info):
         matrix, distortion, rectification, signature = rectified_camera_model(

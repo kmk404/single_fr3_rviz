@@ -107,6 +107,34 @@ def test_node_sync_size_and_watchdog_reset(node):
     assert not Path(node.output_path).exists()
 
 
+def test_faster_camera_info_does_not_clear_stable_window(node):
+    # ZED can publish CameraInfo at 60 Hz while images arrive at 20 Hz.
+    # Unmatched extra info messages must be bounded without resetting frames.
+    for i in range(30):
+        image, info = data(node, i)
+        node._camera_info_callback(info)
+        node._image_callback(image)
+        for offset in (20_000_000, 40_000_000):
+            extra = CameraInfo()
+            extra.header.frame_id = info.header.frame_id
+            stamp = info.header.stamp.sec * 1_000_000_000 + info.header.stamp.nanosec + offset
+            extra.header.stamp.sec, extra.header.stamp.nanosec = divmod(stamp, 1_000_000_000)
+            node._camera_info_callback(extra)
+    assert len(node.infos) <= 10
+    assert node.window.state == 'saved'
+    assert Path(node.output_path).exists()
+
+
+def test_unmatched_image_queue_overflow_still_resets(node):
+    feed(node, 0)
+    assert len(node.window.frames) == 1
+    for i in range(1, 12):
+        image, _ = data(node, i)
+        node._image_callback(image)
+    assert node.window.reason == 'synchronization_queue_overflow'
+    assert not node.window.frames
+
+
 def test_failed_atomic_save_preserves_previous_yaml_and_rearms(node):
     path = Path(node.output_path)
     path.write_text('previous: true\n')

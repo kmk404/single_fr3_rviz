@@ -113,6 +113,8 @@ ros2 service call /camera_extrinsic_calibrator/recollect std_srvs/srv/Trigger '{
 
 相机采样期间固定；至少两张支持板，默认连续 2 秒且至少 30 帧，通过共同位姿验收后才保存。
 若一直等待，检查 Image/CameraInfo 时间戳、frame、尺寸及实际 P/R，而不是放宽质量阈值。
+ZED CameraInfo 若以高于图像的频率发布，多出的未配对 CameraInfo 会从有界缓存中丢弃，
+不会触发稳定窗口重置；只有未配对图像溢出才报告 `synchronization_queue_overflow`。
 所有阈值及状态语义见仓库 README。
 
 ## Docker 复验

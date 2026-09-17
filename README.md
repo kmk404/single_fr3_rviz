@@ -274,8 +274,9 @@ ros2 launch camera_extrinsic_calibration camera_extrinsic_calibration.launch.py 
 SHA-256 和输出绝对路径；不传 `layout_file` 时仍默认使用安装目录的配置。
 
 默认订阅 `/zed/zed_node/left/color/rect/image` 和对应 `camera_info`，严格核对
-`zed_left_camera_frame_optical`。Image/CameraInfo 必须具有**相同时间戳**，缓存最多
-10 条，不复用旧 CameraInfo；未配对、队列溢出或中断会阻止稳定验收。若 wrapper
+`zed_left_camera_frame_optical`。Image/CameraInfo 必须具有**相同时间戳**，各自缓存最多
+10 条，不复用旧 CameraInfo；多余的高频 CameraInfo 只会被丢弃，不会清空稳定窗口。
+未配对图像溢出或数据中断会阻止稳定验收。若 wrapper
 使用不同名称，在 `node.yaml` 修改 topics/frame。请先核查实际消息，不要放宽检测条件。
 
 现场左眼尺寸为 **1280×720**，`node.yaml` 的 `expected_image_width/height` 默认严格检查
@@ -378,6 +379,8 @@ OpenCV 5.0.0 验证。用户级 OpenCV 5 与本机 Humble 的 cv_bridge 不兼�
 变换方向、上排 180° 顺序、单板拒绝、两板矛盾、三/四板异常、同等支持歧义、稳定及
 带噪序列、移动/慢漂移/旋转、丢失/时间戳/间断/内参尺寸变化、逐帧最终残差、一次锁定/
 连续模式/重新采集、精确配对、非单位 R 换算、原图保护及原子写入失败。
+针对现场 CameraInfo 约 59 Hz、图像约 20 Hz 的速率差，随后补充了两项同步缓存回归测试；
+本机 Humble / 系统 OpenCV 环境现为 47 项通过。该补丁仍需在工控机 Jazzy 环境复验。
 
 仍需现场验证：工控机 ZED wrapper 的消息配对、实际 P/R/分辨率、光照与右下 ID0
 检出率、实际静止/移动序列、保存路径权限，以及用独立实测基准评估绝对精度。
