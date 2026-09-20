@@ -54,6 +54,7 @@ class Omega7Teleop(Node):
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
         self.create_service(Trigger, "~/recalibrate", self._on_recalibrate)
+        self.create_service(Trigger, "~/toggle_motion", self._on_toggle_motion)
 
         self._device = None
         self._last_open_attempt = 0.0
@@ -61,7 +62,6 @@ class Omega7Teleop(Node):
         self._last_joint_state_time = None
         self._current_joints = None
         self._fixed_j7 = None
-        self._release_seen = False
         self._active = False
         self._generation = 0
         self._ik_pending = False
@@ -78,6 +78,7 @@ class Omega7Teleop(Node):
         self._gripper_last_sent_width = None
         self._last_gripper_send = 0.0
         self._last_log_times = {}
+        self._motion_paused = True
 
         self.create_timer(1.0 / self.device_rate_hz, self._sample_device)
         self.create_timer(1.0 / self.command_rate_hz, self._command_tick)
@@ -252,7 +253,6 @@ class Omega7Teleop(Node):
         try:
             self._device = DhdDevice(self.sdk_library, self.require_omega7)
             name = self._device.connect()
-            self._release_seen = False
             self.get_logger().info(f"Connected to {name}; release the gripper before use")
         except DhdError as error:
             self._device = None
@@ -275,13 +275,7 @@ class Omega7Teleop(Node):
             return
 
         self._gripper_requested_width = self._map_gripper(sample.gripper_gap)
-        if not sample.enabled:
-            if self._active:
-                self._deactivate("Omega.7 gripper released")
-            self._release_seen = True
-            self._gripper_requested_width = self.robot_gripper_open_width
-            self._cancel_gripper_motion()
-            self._maybe_send_gripper()
+        self._maybe_send_gripper()
 
     def _disconnect_device(self, reason):
         self._deactivate(f"Omega.7 data/connection fault: {reason}")
@@ -293,7 +287,6 @@ class Omega7Teleop(Node):
         self._device = None
         self._latest_sample = None
         self._last_sample_time = None
-        self._release_seen = False
 
     def _map_gripper(self, gap):
         fraction = (gap - self.omega_gripper_closed_gap) / (
@@ -321,7 +314,7 @@ class Omega7Teleop(Node):
     def _engage(self):
         if self._latest_sample is None or self._current_joints is None:
             return False
-        if self._fixed_j7 is None or not self._release_seen:
+        if self._fixed_j7 is None or self._motion_paused:
             return False
         if self._last_joint_state_time is None or (
             time.monotonic() - self._last_joint_state_time > self.joint_state_timeout
@@ -352,13 +345,12 @@ class Omega7Teleop(Node):
     def _command_tick(self):
         if self._latest_sample is None:
             return
-        if not self._latest_sample.enabled:
+        if self._motion_paused:
             return
         if not self._active and not self._engage():
             return
         if self._recalibrate_requested:
             self._deactivate("recalibration requested")
-            self._release_seen = False
             return
         if self._ik_pending:
             self._maybe_send_gripper()
@@ -527,7 +519,6 @@ class Omega7Teleop(Node):
     def _deactivate(self, reason):
         was_active = self._active
         self._active = False
-        self._release_seen = False
         self._generation += 1
         self._ik_pending = False
         self._master_origin = None
@@ -540,11 +531,8 @@ class Omega7Teleop(Node):
 
     def _maybe_send_gripper(self):
         now = time.monotonic()
-        # A close command is only valid while arm teleoperation is engaged.  An
-        # explicit release sample is still allowed to command the fully open width.
-        if self._latest_sample is None or (
-            self._latest_sample.enabled and not self._active
-        ):
+        # Gripper commands remain independent of arm motion enablement.
+        if self._latest_sample is None:
             return
         if self._gripper_busy:
             if (
@@ -660,11 +648,23 @@ class Omega7Teleop(Node):
 
     def _on_recalibrate(self, _request, response):
         self._recalibrate_requested = True
+        self._motion_paused = True
         if self._active:
             self._deactivate("recalibration requested")
-        self._release_seen = False
         response.success = True
         response.message = "Release and squeeze the Omega.7 gripper to capture new zeros"
+        return response
+
+    def _on_toggle_motion(self, _request, response):
+        if self._active:
+            self._motion_paused = True
+            self._deactivate("motion toggled off")
+            response.success = True
+            response.message = "Omega.7 motion disabled"
+            return response
+        self._motion_paused = False
+        response.success = True
+        response.message = "Omega.7 motion enabled; waiting for a valid device sample"
         return response
 
     def destroy_node(self):

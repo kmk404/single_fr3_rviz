@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     git \
     libeigen3-dev \
+    libgeographiclib-dev \
     libpoco-dev \
     libusb-1.0-0 \
     python3-colcon-common-extensions \

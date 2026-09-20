@@ -9,5 +9,6 @@ if command -v xhost >/dev/null 2>&1; then
 fi
 
 docker compose --env-file .env -f docker/compose.yaml run --rm single_fr3 \
-  ros2 launch omega7_teleop omega7_teleop.launch.py \
+  bash /workspace/ops/omega7_keyboard_wrapper.sh \
+  omega7_teleop omega7_teleop.launch.py \
   use_fake_hardware:=true use_rviz:=true

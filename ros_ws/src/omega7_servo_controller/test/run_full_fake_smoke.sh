@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Keep fake controller names and commands isolated from any real FR3 stack
+# already running on the host network.
+export ROS_DOMAIN_ID="${OMEGA7_TEST_ROS_DOMAIN_ID:-171}"
+set +u
+source /opt/ros/jazzy/setup.bash
+set -u
+cd /workspace/ros_ws
+colcon build --symlink-install --packages-select omega7_servo_controller omega7_fresh \
+  --event-handlers console_direct+ >/tmp/omega7_full_fake_build.log
+set +u
+source /workspace/ros_ws/install/setup.bash
+set -u
+ros2 launch omega7_fresh omega7_servo_teleop.launch.py \
+  use_fake_hardware:=true use_rviz:=false start_teleop:=false \
+  >/tmp/omega7_full_fake_launch.log 2>&1 &
+launch_pid=$!
+cleanup() {
+  kill -INT "$launch_pid" 2>/dev/null || true
+  sleep 2
+  kill -TERM "$launch_pid" 2>/dev/null || true
+  sleep 1
+  kill -KILL "$launch_pid" 2>/dev/null || true
+  wait "$launch_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
+sleep 7
+if ! python3 src/omega7_servo_controller/test/fake_servo_smoke.py; then
+  tail -100 /tmp/omega7_full_fake_launch.log
+  exit 1
+fi
+services="$(ros2 service list)"
+if ! grep -q '^/compute_ik$' <<<"$services"; then
+  tail -100 /tmp/omega7_full_fake_launch.log
+  echo "MoveIt IK service missing" >&2
+  exit 1
+fi
+echo "full fake servo teleop stack and IK service verified"

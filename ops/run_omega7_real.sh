@@ -20,4 +20,4 @@ if [[ -n "$robot_ip" ]]; then
 fi
 
 docker compose --env-file .env -f docker/compose.yaml run --rm single_fr3 \
-  "${launch_args[@]}"
+  bash /workspace/ops/omega7_keyboard_wrapper.sh "${launch_args[@]:2}"

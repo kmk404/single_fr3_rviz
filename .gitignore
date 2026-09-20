@@ -11,3 +11,17 @@ __pycache__/
 !/reports/README.md
 !/reports/rviz_fake.png
 SDK3.17.7/
+/sdk-*-linux-*/
+/log/
+/.vscode/
+/camera_extrinsic.yaml
+/config/*.bak
+/reports/omega7_fresh_ros/
+/reports/*_state.json
+/reports/camera_extrinsic.yaml
+/gripper_native_test/build/
+/gripper_ws/build/
+/gripper_ws/install/
+/gripper_ws/log/
+/.pytest_cache/
+**/.pytest_cache/

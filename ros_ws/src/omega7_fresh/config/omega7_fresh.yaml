@@ -1,0 +1,58 @@
+omega7_fresh:
+  ros__parameters:
+    sdk_library: /tmp/forcedimension_sdk/lib/release/lin-x86_64-gcc/libdhd.so.3.17.7
+    base_frame: fr3_link0
+    ee_link: fr3_hand_tcp
+    arm_group: fr3_arm
+    ik_service: /compute_ik
+    gripper_move_action: /franka_gripper/move
+    gripper_grasp_action: /franka_gripper/grasp
+    command_rate_hz: 50.0
+    device_timeout: 0.10
+    joint_state_timeout: 0.25
+    # Two-to-one forward translation, with wider lateral (Y) and vertical (Z) motion.
+    position_scale: [2.0, 2.5, 2.5]
+    # DHD raw world -> FR3 base: raw X -> +X, raw Y -> +Y, raw Z -> +Z.
+    # Physical checks associate front/back with X, left/right with Y, up/down with Z.
+    # Identity has det=+1; translation does not rotate with either wrist pose.
+    axis_mapping: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    orientation_scale: 1.0
+    position_deadzone: 0.001
+    orientation_deadzone: 0.015
+    max_linear_speed: 0.15
+    max_angular_speed: 0.60
+    # fr3_hand_tcp may descend to the base/table plane for low-object grasping.
+    workspace_min: [0.10, -0.55, 0.00]
+    workspace_max: [0.75, 0.55, 0.90]
+    # Leave velocity headroom below the controller's Ruckig limit of 0.18 rad/s.
+    max_joint_velocity: [0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.10]
+    max_ik_joint_delta: 0.12
+    max_servo_following_error: 0.08
+    min_joint_limit_margin: 0.02
+    omega_gripper_closed_gap: 0.0
+    omega_gripper_open_gap: 0.025
+    # Full-close requests Grasp; contact-detected Grasp remains active until release.
+    omega_gripper_engage_gap: 0.001
+    omega_gripper_release_gap: 0.015
+    # Reaching this physical gap always requests a full-close Grasp target.
+    omega_gripper_full_close_gap: 0.001
+    # After auto-contact, require this extra Omega opening beyond the current gap.
+    omega_gripper_contact_release_margin: 0.002
+    robot_gripper_closed_width: 0.0
+    robot_gripper_open_width: 0.08
+    # One full-range Move avoids stop/start pauses between short Franka actions.
+    gripper_max_move_step: 0.080
+    # Move is used for free position following; Grasp closes with force and holds contact.
+    gripper_speed: 0.10
+    gripper_grasp_speed: 0.05
+    gripper_grasp_force: 20.0
+    gripper_grasp_epsilon_inner: 0.005
+    gripper_grasp_epsilon_outer: 0.015
+    # After releasing Grasp, open beyond its outer tolerance before resuming width following.
+    gripper_release_margin: 0.010
+    # Confirm obstruction only after an aborted closing Move with fresh width feedback.
+    # Width thresholds are meters; no active-action dwell timer is used.
+    gripper_contact_error_threshold: 0.006
+    gripper_contact_clear_error: 0.003
+    gripper_deadband: 0.001
+    gripper_command_interval: 0.05

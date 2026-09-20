@@ -1,0 +1,6 @@
+services:
+  single_fr3:
+    environment:
+      ROS_LOG_DIR: /workspace/reports/omega7_fresh_ros
+    device_cgroup_rules:
+      - "c 189:* rwm"

@@ -1,0 +1,26 @@
+/**:
+  controller_manager:
+    ros__parameters:
+      update_rate: 1000
+      thread_priority: 97
+      overruns:
+        manage: false
+        print_warnings: false
+      omega7_servo_controller:
+        type: omega7_servo_controller/Omega7ServoController
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+
+/**:
+  omega7_servo_controller:
+    ros__parameters:
+      max_velocity: 0.18
+      max_acceleration: 0.60
+      max_jerk: 3.0
+      target_timeout: 0.25
+      max_following_error: 0.08
+      max_target_jump: 0.04
+      position_margin: 0.02
+      effort_control: true
+      k_gains: [600.0, 600.0, 600.0, 600.0, 250.0, 150.0, 50.0]
+      d_gains: [30.0, 30.0, 30.0, 30.0, 10.0, 10.0, 5.0]
